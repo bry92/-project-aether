@@ -29,6 +29,9 @@ export default function PulseFeed() {
           timestamp: data.timestamp,
         };
         setPulseItems((prev) => [newItem, ...prev].slice(0, 20));
+      } else if (data.type === 'approval_required') {
+        // We will trigger the GhostPreview visibility here
+        window.dispatchEvent(new CustomEvent('aether-approval-required', { detail: data.approval }));
       }
     };
 
@@ -50,10 +53,10 @@ export default function PulseFeed() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className={styles.item}
+              className={`${styles.item} glass-hover`}
             >
               <div className={styles.agentInfo}>
-                <span className={styles.agentName}>{item.agent}</span>
+                <span className={`${styles.agentName} ${styles[item.agent.toLowerCase()] || ''}`}>{item.agent}</span>
                 <span className={styles.timestamp}>{item.timestamp}</span>
               </div>
               <p className={styles.action}>{item.action}</p>

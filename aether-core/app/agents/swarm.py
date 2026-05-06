@@ -142,7 +142,7 @@ async def marketer_node(state: AgentState):
     return {"messages": [AIMessage(content=action)]}
 
 async def architect_node(state: AgentState):
-    """The Architect agent uses LLM to design systems."""
+    """The Architect agent designs systems."""
     goal = state.get("goal", "")
     
     if not llm:
@@ -154,13 +154,31 @@ async def architect_node(state: AgentState):
         ])
         action = response.content
     
+    # Request approval for the design
+    pending_approval = {
+        "id": str(uuid.uuid4()),
+        "agent": "Architect",
+        "description": "Approve the technical architecture design.",
+        "details": action
+    }
+
     await manager.broadcast({
         "type": "pulse",
         "agent": "Architect",
         "action": action,
         "timestamp": "Just now"
     })
-    return {"messages": [AIMessage(content=action)]}
+    
+    await manager.broadcast({
+        "type": "approval_required",
+        "approval": pending_approval
+    })
+
+    return {"messages": [AIMessage(content=action)], "pending_approvals": [pending_approval]}
+
+async def human_approval_node(state: AgentState):
+    """A dummy node that acts as a placeholder for human intervention."""
+    return state
 
 # Define the graph
 workflow = StateGraph(AgentState)
@@ -169,6 +187,7 @@ workflow.add_node("ceo", ceo_node)
 workflow.add_node("architect", architect_node)
 workflow.add_node("coder", coder_node)
 workflow.add_node("marketer", marketer_node)
+workflow.add_node("human_approval", human_approval_node)
 
 workflow.set_entry_point("ceo")
 
@@ -185,8 +204,12 @@ workflow.add_conditional_edges(
     }
 )
 
-workflow.add_edge("architect", END)
-workflow.add_edge("coder", END)
-workflow.add_edge("marketer", END)
+# After architect/coder/marketer, always go to human_approval
+workflow.add_edge("architect", "human_approval")
+workflow.add_edge("coder", "human_approval")
+workflow.add_edge("marketer", "human_approval")
+
+# From human_approval, it goes to END for now (in a real app, it would loop back or proceed)
+workflow.add_edge("human_approval", END)
 
 graph = workflow.compile()

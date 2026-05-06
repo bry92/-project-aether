@@ -30,20 +30,20 @@ export default function Home() {
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.2 }}
-          className={`${styles.card} glass`}
+          className={`${styles.card} glass glass-hover`}
         >
           <div className={styles.cardHeader}>
             <Activity className={styles.cardIcon} />
-            <h3>System Status</h3>
+            <h3>SYSTEM PULSE</h3>
           </div>
           <div className={styles.cardContent}>
             <div className={styles.stat}>
-              <span>Agents Online</span>
-              <span className={styles.statValue}>5/5</span>
+              <span className={styles.statLabel}>SWARM VITALITY</span>
+              <span className={styles.statValue}>100%</span>
             </div>
             <div className={styles.stat}>
-              <span>Active Threads</span>
-              <span className={styles.statValue}>12</span>
+              <span className={styles.statLabel}>ACTIVE AGENTS</span>
+              <span className={styles.statValue}>5 / 5</span>
             </div>
           </div>
         </motion.div>

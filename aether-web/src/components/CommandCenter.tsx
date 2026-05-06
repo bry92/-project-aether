@@ -37,7 +37,7 @@ export default function CommandCenter() {
         <Sparkles size={16} className={styles.icon} />
         <span>COMMAND CENTER</span>
       </div>
-      <form onSubmit={handleSubmit} className={styles.form}>
+      <form onSubmit={handleSubmit} className={`${styles.form} ${isProcessing ? styles.processing : ''}`}>
         <input
           type="text"
           value={command}
@@ -47,7 +47,16 @@ export default function CommandCenter() {
           disabled={isProcessing}
         />
         <button type="submit" className={styles.submitButton} disabled={isProcessing}>
-          <Send size={18} />
+          {isProcessing ? (
+            <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+            >
+              <Sparkles size={18} />
+            </motion.div>
+          ) : (
+            <Send size={18} />
+          )}
         </button>
       </form>
     </div>

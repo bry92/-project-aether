@@ -57,13 +57,21 @@
 .stat {
   display: flex;
   justify-content: space-between;
-  padding: 0.75rem 0;
+  padding: 1rem 0;
   border-bottom: 1px solid var(--glass-border);
 }
 
+.statLabel {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.4);
+}
+
 .statValue {
-  font-weight: 700;
-  color: white;
+  font-weight: 800;
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-glow);
 }
 
 .cardText {
