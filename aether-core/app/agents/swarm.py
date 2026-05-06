@@ -1,85 +1,166 @@
-from langchain_openai import ChatOpenAI
+from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
+from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langgraph.graph import StateGraph, END
 from app.core.state import AgentState
 from app.core.websocket import manager
 from app.core.toolbox import toolbox
+from app.core.memory import memory
 import json
+import uuid
+import os
 
-# Initialize LLM
-llm = ChatOpenAI(model="gpt-4o", streaming=True)
+# Initialize LLM with Hugging Face
+def get_llm():
+    hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
+    if not hf_token or hf_token == "your_huggingface_token_here":
+        # Fallback to OpenAI if HF token is missing but OpenAI is present
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key and openai_key != "your_openai_key_here":
+            from langchain_openai import ChatOpenAI
+            return ChatOpenAI(model="gpt-4o", streaming=True)
+        return None
+    
+    # Use Llama-3-8B-Instruct on Hugging Face
+    endpoint = HuggingFaceEndpoint(
+        repo_id="meta-llama/Meta-Llama-3-8B-Instruct",
+        task="text-generation",
+        max_new_tokens=512,
+        huggingfacehub_api_token=hf_token
+    )
+    return ChatHuggingFace(llm=endpoint)
+
+llm = get_llm()
+
+CEO_PROMPT = """You are the Aether CEO. Your job is to analyze the project goal and delegate tasks.
+Available specialized agents:
+- architect: Designs systems and technical specs.
+- coder: Implements features and handles GitHub.
+- marketer: Researches markets and handles Stripe payments.
+
+Relevant Context from Memory:
+{context}
+
+Choose the next_agent and provide a clear directive.
+Response format: JSON with "next_agent" and "directive" fields. Ensure you ONLY output JSON."""
 
 async def ceo_node(state: AgentState):
-    """The CEO agent routes tasks and manages overall project state."""
+    """The CEO agent uses LLM and Memory to strategize."""
     messages = state["messages"]
-    last_message = messages[-1].content.lower()
+    goal = state.get("goal", "")
     
-    # Simple logic for routing
-    next_agent = "architect" 
-    if any(k in last_message for k in ["code", "fix", "commit", "github"]):
-        next_agent = "coder"
-    elif any(k in last_message for k in ["market", "sell", "stripe", "buy", "browser"]):
-        next_agent = "marketer"
+    # Retrieve context from memory
+    context = memory.query(goal, n_results=3)
     
+    if not llm:
+        # Mock logic if no API key
+        next_agent = "architect"
+        directive = "Model provider token missing. Simulation mode active."
+    else:
+        response = await llm.ainvoke([
+            SystemMessage(content=CEO_PROMPT.format(context=context)),
+            *messages
+        ])
+        
+        content = response.content
+        # Hugging Face models sometimes output extra text, attempt to find JSON
+        try:
+            if "{" in content:
+                json_str = content[content.find("{"):content.rfind("}")+1]
+                data = json.loads(json_str)
+            else:
+                data = json.loads(content)
+            next_agent = data.get("next_agent", "architect")
+            directive = data.get("directive", "Proceed with design.")
+        except:
+            # Heuristic fallback if JSON parsing fails
+            content_lower = content.lower()
+            if "coder" in content_lower: next_agent = "coder"
+            elif "marketer" in content_lower: next_agent = "marketer"
+            else: next_agent = "architect"
+            directive = content
+
     await manager.broadcast({
         "type": "pulse",
         "agent": "CEO",
-        "action": f"Strategizing objective. Delegating to {next_agent.capitalize()}.",
+        "action": f"Strategy: {directive}",
         "timestamp": "Just now"
     })
     
-    return {"next_agent": next_agent}
+    return {"next_agent": next_agent, "messages": [AIMessage(content=directive)]}
 
 async def coder_node(state: AgentState):
-    """The Coder agent implements features and interacts with GitHub."""
-    goal = state.get("goal", "").lower()
+    """The Coder agent uses LLM to write code or call tools."""
+    goal = state.get("goal", "")
     
-    if "github" in goal or "repo" in goal:
-        # Simulate repository creation logic
-        repo_name = f"aether-project-{json.dumps(goal)[:10].replace(' ', '-')}"
-        result = await toolbox.call_tool("Coder", "create_github_repo", {"name": repo_name})
-        action = f"Created repository: {repo_name}"
+    if not llm:
+        action = "Coder: Simulation mode active. API Key required for real reasoning."
     else:
-        action = "Implementing full-stack features and writing unit tests."
+        prompt = f"Objective: {goal}. You are the Coder. If you need to create a repo or commit, say so. Otherwise, describe your implementation plan."
+        
+        response = await llm.ainvoke([
+            SystemMessage(content="You are the Coder agent for Aether."),
+            HumanMessage(content=prompt)
+        ])
+        action = response.content
     
+    # Simple tool-triggering logic for prototype
+    if "repo" in action.lower() or "github" in action.lower():
+        repo_name = f"aether-build-{int(uuid.uuid4().hex[:8], 16)}"
+        await toolbox.call_tool("Coder", "create_github_repo", {"name": repo_name})
+        action = f"Created GitHub repository: {repo_name}"
+
     await manager.broadcast({
         "type": "pulse",
         "agent": "Coder",
         "action": action,
         "timestamp": "Just now"
     })
-    return {"messages": [("assistant", f"Coder: {action}")]}
+    return {"messages": [AIMessage(content=action)]}
 
 async def marketer_node(state: AgentState):
-    """The Marketer agent researches markets and handles payments."""
-    goal = state.get("goal", "").lower()
+    """The Marketer agent uses LLM to handle business ops."""
+    goal = state.get("goal", "")
     
-    if "browse" in goal or "market" in goal:
-        # Simulate browser research
-        result = await toolbox.call_tool("Marketer", "capture_page", {"url": "https://news.ycombinator.com"})
-        action = "Conducting market research via autonomous browser control."
-    elif "stripe" in goal or "payment" in goal:
-        result = await toolbox.call_tool("Marketer", "create_checkout_session", {"product_name": "Aether Pro", "amount": 9900})
-        action = "Configuring Stripe checkout sessions for monetization."
+    if not llm:
+        action = "Marketer: Simulation mode active."
     else:
-        action = "Drafting marketing copy and SEO strategy."
-
+        response = await llm.ainvoke([
+            SystemMessage(content="You are the Marketer agent for Aether."),
+            HumanMessage(content=f"Objective: {goal}")
+        ])
+        action = response.content
+    
+    if "market" in action.lower() or "browse" in action.lower():
+        await toolbox.call_tool("Marketer", "capture_page", {"url": "https://news.ycombinator.com"})
+    
     await manager.broadcast({
         "type": "pulse",
         "agent": "Marketer",
         "action": action,
         "timestamp": "Just now"
     })
-    return {"messages": [("assistant", f"Marketer: {action}")]}
+    return {"messages": [AIMessage(content=action)]}
 
 async def architect_node(state: AgentState):
-    """The Architect agent designs the technical solution."""
+    """The Architect agent uses LLM to design systems."""
+    goal = state.get("goal", "")
+    
+    if not llm:
+        action = "Architect: Architecture finalized (Simulation)."
+    else:
+        response = await llm.ainvoke([
+            SystemMessage(content="You are the Architect agent for Aether."),
+            HumanMessage(content=f"Objective: {goal}")
+        ])
+        action = response.content
+    
     await manager.broadcast({
         "type": "pulse",
         "agent": "Architect",
-        "action": "Designing scalable architecture and multi-agent protocols.",
+        "action": action,
         "timestamp": "Just now"
     })
-    return {"messages": [("assistant", "Architect: Architecture finalized.")]}
+    return {"messages": [AIMessage(content=action)]}
 
 # Define the graph
 workflow = StateGraph(AgentState)
