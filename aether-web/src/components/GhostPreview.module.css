@@ -1,0 +1,104 @@
+.preview {
+  position: absolute;
+  top: 2rem;
+  right: 2rem;
+  width: 500px;
+  border-radius: 16px;
+  z-index: 300;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+}
+
+.header {
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.titleGroup h3 {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--accent);
+}
+
+.icon {
+  color: var(--accent);
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.approve {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.reject {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--glass-border);
+  padding: 0.4rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.content {
+  padding: 1.5rem;
+}
+
+.planHeader {
+  margin-bottom: 1rem;
+}
+
+.agentTag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--accent);
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+  display: block;
+}
+
+.planHeader p {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.4;
+}
+
+.diffView {
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 10px;
+  padding: 1rem;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.8rem;
+}
+
+.diffLine {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.diffLineAdded {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}

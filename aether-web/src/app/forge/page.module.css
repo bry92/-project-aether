@@ -1,0 +1,19 @@
+.forgeContainer {
+  height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.workspace {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.editorPlaceholder {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
