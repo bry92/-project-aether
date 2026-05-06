@@ -1,0 +1,40 @@
+from app.api.github import github
+from app.api.browser import browser
+from app.api.stripe import stripe
+from app.core.websocket import manager
+from typing import Dict, Any
+
+class AgentToolbox:
+    @staticmethod
+    async def call_tool(agent_name: str, tool_name: str, params: Dict[str, Any]):
+        """Execute a tool and broadcast the action to the Live Pulse."""
+        
+        await manager.broadcast({
+            "type": "pulse",
+            "agent": agent_name,
+            "action": f"Executing tool: {tool_name} with params {params}",
+            "timestamp": "Just now"
+        })
+
+        try:
+            if tool_name == "create_github_repo":
+                return github.create_repo(**params)
+            elif tool_name == "commit_files":
+                return github.commit_files(**params)
+            elif tool_name == "capture_page":
+                return await browser.capture_page(**params)
+            elif tool_name == "create_checkout_session":
+                return stripe.create_checkout_session(**params)
+            else:
+                return f"Error: Tool {tool_name} not found."
+        except Exception as e:
+            error_msg = f"Error executing {tool_name}: {str(e)}"
+            await manager.broadcast({
+                "type": "pulse",
+                "agent": "SYSTEM",
+                "action": error_msg,
+                "timestamp": "Just now"
+            })
+            return error_msg
+
+toolbox = AgentToolbox()
