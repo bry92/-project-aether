@@ -8,6 +8,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Body
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.websocket import manager
 from app.core.engine import process_task
+from app.core.approvals import approval_manager
 import asyncio
 import json
 
@@ -69,6 +70,40 @@ async def simulate_pulse():
             "timestamp": "Just now"
         })
         await asyncio.sleep(5)
+
+@app.get("/files/list")
+async def list_files(path: str = "."):
+    """List files in the specified path relative to the project root."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    target_path = os.path.join(root_dir, path)
+    
+    if not os.path.exists(target_path):
+        return {"error": "Path not found"}, 404
+    
+    def get_tree(p):
+        name = os.path.basename(p)
+        if os.path.isdir(p):
+            # Ignore some directories
+            if name in [".git", "__pycache__", "node_modules", ".next", "venv"]:
+                return None
+            return {
+                "name": name,
+                "type": "folder",
+                "children": [c for c in (get_tree(os.path.join(p, f)) for f in os.listdir(p)) if c]
+            }
+        else:
+            return {"name": name, "type": "file"}
+
+    # Return the tree starting from the parent of aether-core (the aether root)
+    project_root = os.path.dirname(root_dir)
+    tree = get_tree(project_root)
+    return tree
+
+@app.post("/tasks/approve/{approval_id}")
+async def approve_task(approval_id: str):
+    if approval_manager.approve(approval_id):
+        return {"status": "Approved"}
+    return {"error": "Approval ID not found"}, 404
 
 @app.on_event("startup")
 async def startup_event():

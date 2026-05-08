@@ -5,6 +5,7 @@ from app.core.state import AgentState
 from app.core.websocket import manager
 from app.core.toolbox import toolbox
 from app.core.memory import memory
+from app.core.approvals import approval_manager
 import json
 import uuid
 import os
@@ -33,14 +34,14 @@ llm = get_llm()
 
 CEO_PROMPT = """You are the Aether CEO. Your job is to analyze the project goal and delegate tasks.
 Available specialized agents:
-- architect: Designs systems and technical specs.
-- coder: Implements features and handles GitHub.
-- marketer: Researches markets and handles Stripe payments.
+- architect: Designs systems, technical specs, and file structures.
+- coder: Implements features, writes/reads files, and handles GitHub.
+- marketer: Researches markets, handles Stripe, and defines business logic.
 
 Relevant Context from Memory:
 {context}
 
-Choose the next_agent and provide a clear directive.
+You should break down the goal into steps and delegate to the appropriate agent.
 Response format: JSON with "next_agent" and "directive" fields. Ensure you ONLY output JSON."""
 
 async def ceo_node(state: AgentState):
@@ -56,13 +57,14 @@ async def ceo_node(state: AgentState):
         next_agent = "architect"
         directive = "Model provider token missing. Simulation mode active."
     else:
+        # Get the last few messages for context
+        history = messages[-5:]
         response = await llm.ainvoke([
             SystemMessage(content=CEO_PROMPT.format(context=context)),
-            *messages
+            *history
         ])
         
         content = response.content
-        # Hugging Face models sometimes output extra text, attempt to find JSON
         try:
             if "{" in content:
                 json_str = content[content.find("{"):content.rfind("}")+1]
@@ -72,11 +74,8 @@ async def ceo_node(state: AgentState):
             next_agent = data.get("next_agent", "architect")
             directive = data.get("directive", "Proceed with design.")
         except:
-            # Heuristic fallback if JSON parsing fails
-            content_lower = content.lower()
-            if "coder" in content_lower: next_agent = "coder"
-            elif "marketer" in content_lower: next_agent = "marketer"
-            else: next_agent = "architect"
+            # Heuristic fallback
+            next_agent = "architect"
             directive = content
 
     await manager.broadcast({
@@ -88,26 +87,46 @@ async def ceo_node(state: AgentState):
     
     return {"next_agent": next_agent, "messages": [AIMessage(content=directive)]}
 
+CODER_PROMPT = """You are the Aether Coder. You implement features and write code.
+Available tools:
+- read_file(path): Read the content of a file.
+- write_file(path, content): Write content to a file.
+- run_command(command): Run a shell command.
+- create_github_repo(name): Create a new repository.
+
+When you are ready to write code, describe your plan and then use the tools.
+Objective: {goal}
+Directive: {directive}"""
+
 async def coder_node(state: AgentState):
     """The Coder agent uses LLM to write code or call tools."""
     goal = state.get("goal", "")
+    directive = state["messages"][-1].content
     
     if not llm:
-        action = "Coder: Simulation mode active. API Key required for real reasoning."
+        action = "Coder: Simulation mode active."
     else:
-        prompt = f"Objective: {goal}. You are the Coder. If you need to create a repo or commit, say so. Otherwise, describe your implementation plan."
-        
         response = await llm.ainvoke([
-            SystemMessage(content="You are the Coder agent for Aether."),
-            HumanMessage(content=prompt)
+            SystemMessage(content=CODER_PROMPT.format(goal=goal, directive=directive)),
+            HumanMessage(content="Implement the requested change.")
         ])
         action = response.content
     
-    # Simple tool-triggering logic for prototype
-    if "repo" in action.lower() or "github" in action.lower():
-        repo_name = f"aether-build-{int(uuid.uuid4().hex[:8], 16)}"
-        await toolbox.call_tool("Coder", "create_github_repo", {"name": repo_name})
-        action = f"Created GitHub repository: {repo_name}"
+    # Simple heuristic to trigger tools for the prototype
+    # In a real app, we would use LangChain's tool-calling support
+    if "write_file" in action.lower() and "```" in action:
+        # Extract code and path
+        try:
+            import re
+            code_blocks = re.findall(r"```(?:\w+)?\n(.*?)\n```", action, re.DOTALL)
+            path_match = re.search(r"path[:\s]+([\w\./-]+)", action)
+            if code_blocks and path_match:
+                path = path_match.group(1)
+                content = code_blocks[0]
+                await toolbox.call_tool("Coder", "write_file", {"path": path, "content": content})
+                action = f"Successfully implemented changes in {path}"
+        except Exception as e:
+            action = f"Error during implementation: {str(e)}"
 
     await manager.broadcast({
         "type": "pulse",
@@ -177,8 +196,31 @@ async def architect_node(state: AgentState):
     return {"messages": [AIMessage(content=action)], "pending_approvals": [pending_approval]}
 
 async def human_approval_node(state: AgentState):
-    """A dummy node that acts as a placeholder for human intervention."""
-    return state
+    """Wait for human intervention via the approval manager."""
+    pending = state.get("pending_approvals", [])
+    if not pending:
+        return state
+    
+    approval_id = pending[0]["id"]
+    approval_manager.create_approval(approval_id)
+    
+    await manager.broadcast({
+        "type": "pulse",
+        "agent": "SYSTEM",
+        "action": f"Awaiting approval: {approval_id}",
+        "timestamp": "Just now"
+    })
+    
+    await approval_manager.wait_for_approval(approval_id)
+    
+    await manager.broadcast({
+        "type": "pulse",
+        "agent": "SYSTEM",
+        "action": f"Approval granted: {approval_id}",
+        "timestamp": "Just now"
+    })
+    
+    return {"pending_approvals": []}
 
 # Define the graph
 workflow = StateGraph(AgentState)

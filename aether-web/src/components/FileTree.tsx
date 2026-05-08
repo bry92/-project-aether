@@ -1,7 +1,7 @@
 'use client';
 
-import { Folder, File, ChevronRight, ChevronDown } from 'lucide-react';
-import { useState } from 'react';
+import { Folder, File, ChevronRight, ChevronDown, RefreshCw } from 'lucide-react';
+import { useState, useEffect } from 'react';
 import styles from './FileTree.module.css';
 
 interface FileNode {
@@ -10,35 +10,48 @@ interface FileNode {
   children?: FileNode[];
 }
 
-const mockStructure: FileNode[] = [
-  {
-    name: 'src',
-    type: 'folder',
-    children: [
-      { name: 'app.py', type: 'file' },
-      { name: 'utils.py', type: 'file' },
-      {
-        name: 'components',
-        type: 'folder',
-        children: [
-          { name: 'Header.tsx', type: 'file' },
-          { name: 'Button.tsx', type: 'file' },
-        ],
-      },
-    ],
-  },
-  { name: 'package.json', type: 'file' },
-  { name: 'README.md', type: 'file' },
-];
-
 export default function FileTree() {
+  const [structure, setStructure] = useState<FileNode[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchStructure = async () => {
+    setLoading(true);
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+      const response = await fetch(`${backendUrl}/files/list`);
+      const data = await response.json();
+      if (data.children) {
+        setStructure(data.children);
+      } else {
+        setStructure([data]);
+      }
+    } catch (error) {
+      console.error('Failed to fetch file structure:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStructure();
+  }, []);
+
   return (
     <div className={`${styles.container} glass`}>
-      <div className={styles.header}>EXPLORER</div>
+      <div className={styles.header}>
+        <span>EXPLORER</span>
+        <button onClick={fetchStructure} className={styles.refreshButton}>
+          <RefreshCw size={12} className={loading ? styles.spinning : ''} />
+        </button>
+      </div>
       <div className={styles.tree}>
-        {mockStructure.map((node) => (
-          <TreeNode key={node.name} node={node} depth={0} />
-        ))}
+        {loading ? (
+          <div className={styles.loading}>Scanning workspace...</div>
+        ) : (
+          structure.map((node) => (
+            <TreeNode key={node.name} node={node} depth={0} />
+          ))
+        )}
       </div>
     </div>
   );

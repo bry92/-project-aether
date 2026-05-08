@@ -1,8 +1,10 @@
 from app.api.github import github
 from app.api.browser import browser
 from app.api.stripe import stripe
+from app.core.tools import run_shell_command, write_to_file
 from app.core.websocket import manager
 from typing import Dict, Any
+import os
 
 class AgentToolbox:
     @staticmethod
@@ -25,6 +27,24 @@ class AgentToolbox:
                 return await browser.capture_page(**params)
             elif tool_name == "create_checkout_session":
                 return stripe.create_checkout_session(**params)
+            elif tool_name == "read_file":
+                path = params.get("path")
+                # Safety check: keep it within project root
+                root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                full_path = os.path.join(root_dir, path)
+                if not os.path.exists(full_path):
+                    return f"Error: File {path} not found."
+                with open(full_path, "r") as f:
+                    return f.read()
+            elif tool_name == "write_file":
+                path = params.get("path")
+                content = params.get("content")
+                root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                full_path = os.path.join(root_dir, path)
+                return write_to_file(full_path, content)
+            elif tool_name == "run_command":
+                command = params.get("command")
+                return run_shell_command(command)
             else:
                 return f"Error: Tool {tool_name} not found."
         except Exception as e:

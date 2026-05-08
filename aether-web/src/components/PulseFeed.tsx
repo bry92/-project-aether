@@ -17,7 +17,9 @@ export default function PulseFeed() {
   const [pulseItems, setPulseItems] = useState<PulseItem[]>([]);
 
   useEffect(() => {
-    const socket = new WebSocket('ws://localhost:8000/ws/pulse');
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'localhost:8000';
+    const protocol = backendUrl.includes('localhost') ? 'ws' : 'wss';
+    const socket = new WebSocket(`${protocol}://${backendUrl}/ws/pulse`);
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
