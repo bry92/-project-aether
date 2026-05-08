@@ -3,6 +3,7 @@
 import FileTree from '@/components/FileTree';
 import AgentTerminal from '@/components/AgentTerminal';
 import GhostPreview from '@/components/GhostPreview';
+import MediaPreview from '@/components/MediaPreview';
 import { useState } from 'react';
 import styles from './page.module.css';
 
@@ -16,6 +17,7 @@ export default function ForgePage() {
         <div className={styles.editorPlaceholder}>
           <AgentTerminal />
         </div>
+        <MediaPreview />
       </div>
       
       {showPreview && <GhostPreview />}

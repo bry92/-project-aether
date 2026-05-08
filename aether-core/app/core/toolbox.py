@@ -3,8 +3,10 @@ from app.api.browser import browser
 from app.api.stripe import stripe
 from app.core.tools import run_shell_command, write_to_file
 from app.core.websocket import manager
+from app.core.supabase import supabase
 from typing import Dict, Any
 import os
+import uuid
 
 class AgentToolbox:
     @staticmethod
@@ -41,6 +43,20 @@ class AgentToolbox:
                 content = params.get("content")
                 root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
                 full_path = os.path.join(root_dir, path)
+                
+                # If it's a creative asset, also store in Supabase for the UI
+                if "creatives/" in path:
+                    try:
+                        supabase.table("assets").insert({
+                            "id": str(uuid.uuid4()),
+                            "type": "script",
+                            "title": os.path.basename(path),
+                            "content": content,
+                            "agent": agent_name
+                        }).execute()
+                    except Exception as e:
+                        print(f"Supabase asset store error: {e}")
+
                 return write_to_file(full_path, content)
             elif tool_name == "run_command":
                 command = params.get("command")
