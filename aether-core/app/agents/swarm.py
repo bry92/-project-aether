@@ -10,8 +10,22 @@ import json
 import uuid
 import os
 
-# Initialize LLM with Hugging Face
+# Initialize LLM with Hugging Face or OpenAI via Vercel AI Gateway
 def get_llm():
+    gateway_url = os.getenv("VERCEL_AI_GATEWAY_URL")
+    gateway_key = os.getenv("VERCEL_AI_GATEWAY_KEY")
+    
+    # If gateway is configured, we use it as the base URL for OpenAI-compatible providers
+    if gateway_url and gateway_key:
+        from langchain_openai import ChatOpenAI
+        # The gateway URL usually acts as the base_url for OpenAI SDK
+        return ChatOpenAI(
+            api_key=gateway_key,
+            base_url=gateway_url,
+            model="gpt-4o", # Default to gpt-4o via gateway
+            streaming=True
+        )
+
     hf_token = os.getenv("HUGGINGFACEHUB_API_TOKEN")
     if not hf_token or hf_token == "your_huggingface_token_here":
         # Fallback to OpenAI if HF token is missing but OpenAI is present
