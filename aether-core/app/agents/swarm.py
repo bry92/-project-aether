@@ -151,17 +151,39 @@ async def coder_node(state: AgentState):
     return {"messages": [AIMessage(content=action)]}
 
 async def marketer_node(state: AgentState):
-    """The Marketer agent uses LLM to handle business ops."""
+    """The Marketer agent handles business ops and creative strategy."""
     goal = state.get("goal", "")
+    directive = state["messages"][-1].content
+    
+    MARKETER_PROMPT = """You are the Aether Marketer. Your job is to handle business logic, market research, and creative strategy.
+    
+    Creative Strategy:
+    - If the objective requires advertising, you must draft a high-conversion video ad script.
+    - Focus on the "Magical" and "Autonomous" vibes of Project Aether.
+    - Structure scripts with: [Scene Description], [Voiceover], [Overlay Text].
+    
+    Available tools:
+    - capture_page(url): Research a market or competitor.
+    - create_checkout_session(product_name, amount): Setup payments.
+    - write_file(path, content): Save market reports or ad scripts.
+    
+    Objective: {goal}
+    Directive: {directive}"""
     
     if not llm:
-        action = "Marketer: Simulation mode active."
+        action = "Marketer: Creative strategy simulation mode active."
     else:
         response = await llm.ainvoke([
-            SystemMessage(content="You are the Marketer agent for Aether."),
-            HumanMessage(content=f"Objective: {goal}")
+            SystemMessage(content=MARKETER_PROMPT.format(goal=goal, directive=directive)),
+            HumanMessage(content="Develop a market strategy and an ad creative concept.")
         ])
         action = response.content
+    
+    # Save the creative concept to a file if it looks like a script
+    if "script" in action.lower() or "scene" in action.lower():
+        script_path = f"creatives/ad_script_{int(uuid.uuid4().hex[:4], 16)}.md"
+        await toolbox.call_tool("Marketer", "write_file", {"path": script_path, "content": action})
+        action = f"Generated ad creative script and saved to {script_path}"
     
     if "market" in action.lower() or "browse" in action.lower():
         await toolbox.call_tool("Marketer", "capture_page", {"url": "https://news.ycombinator.com"})
