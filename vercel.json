@@ -1,9 +1,0 @@
-{
-  "version": 2,
-  "public": true,
-  "name": "project-aether",
-  "buildCommand": "npm run build",
-  "installCommand": "npm install",
-  "framework": "nextjs",
-  "rootDirectory": "aether-web"
-}
